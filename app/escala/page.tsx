@@ -99,11 +99,11 @@ export default function EscalaPage() {
 
   const fetchMembers = async () => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*');
+      const { data, error } = await supabase.from('operadores').select('*');
       if (error) throw error;
       setAvailableMembers((data || []).map(d => ({
         id: d.id,
-        nome: d.full_name || 'Sem nome',
+        nome: d.nome || 'Sem nome',
         funcao: d.funcao || 'SONOPLASTA'
       })));
     } catch (err) {
@@ -158,12 +158,16 @@ export default function EscalaPage() {
 
       await supabase.from('escalas').delete().eq('culto_id', editingService.id);
       
-      const scalesToInsert = editMembros.filter(m => m.nome || m.funcao).map(m => ({
-        culto_id: editingService.id,
-        funcao_no_culto: m.funcao || 'Sem função',
-        status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
-        membro_nome: m.nome || null
-      }));
+      const scalesToInsert = editMembros.filter(m => m.nome || m.funcao).map(m => {
+        const foundOp = availableMembers.find(op => op.nome === m.nome);
+        return {
+          culto_id: editingService.id,
+          funcao_no_culto: m.funcao || 'Sem função',
+          status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
+          membro_nome: m.nome || null,
+          operador_id: foundOp ? foundOp.id : null
+        };
+      });
 
       if (scalesToInsert.length > 0) {
         await supabase.from('escalas').insert(scalesToInsert);
@@ -296,12 +300,16 @@ export default function EscalaPage() {
 
       console.log('Culto criado com ID:', newCulto.id);
 
-      const scalesToInsert = membros.filter(m => m.nome || m.funcao).map(m => ({
-        culto_id: newCulto.id,
-        funcao_no_culto: m.funcao || 'Sem função',
-        status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
-        membro_nome: m.nome || null
-      }));
+      const scalesToInsert = membros.filter(m => m.nome || m.funcao).map(m => {
+        const foundOp = availableMembers.find(op => op.nome === m.nome);
+        return {
+          culto_id: newCulto.id,
+          funcao_no_culto: m.funcao || 'Sem função',
+          status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
+          membro_nome: m.nome || null,
+          operador_id: foundOp ? foundOp.id : null
+        };
+      });
 
       if (scalesToInsert.length > 0) {
         console.log('Inserindo escalas:', scalesToInsert);
