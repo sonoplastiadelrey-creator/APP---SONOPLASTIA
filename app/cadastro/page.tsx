@@ -38,6 +38,7 @@ export default function CadastroPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adminCode, setAdminCode] = useState('');
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,12 +47,13 @@ export default function CadastroPage() {
 
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
         options: {
           data: {
             nome,
-            funcao
+            funcao,
+            admin_code: adminCode.trim() || undefined
           }
         }
       });
@@ -200,6 +202,18 @@ export default function CadastroPage() {
                 </div>
               </div>
 
+              <div className="pt-4 border-t border-white/5">
+                <InputGroup 
+                  label="CÓDIGO_DE_SEGURANÇA_ALTO_COMANDO (Apenas para Admins)" 
+                  icon={Shield} 
+                  type="password" 
+                  value={adminCode} 
+                  onChange={setAdminCode} 
+                  placeholder="Deixe em branco para acesso comum"
+                  required={false}
+                />
+              </div>
+
               {error && (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9 }} 
@@ -243,7 +257,7 @@ export default function CadastroPage() {
   );
 }
 
-function InputGroup({ label, icon: Icon, type, value, onChange, placeholder }: any) {
+function InputGroup({ label, icon: Icon, type, value, onChange, placeholder, required = true }: any) {
   return (
     <div className="space-y-3">
       <label className="text-white/20 font-mono text-[10px] font-black uppercase tracking-widest ml-1">{label}</label>
@@ -251,7 +265,7 @@ function InputGroup({ label, icon: Icon, type, value, onChange, placeholder }: a
         <Icon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/10 group-focus-within:text-[#00a3ff] transition-all" />
         <input 
           type={type} 
-          required
+          required={required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
