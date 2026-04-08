@@ -2,10 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, CalendarDays, HardDrive, Users, User, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
+import Image from 'next/image';
 
 const navItems = [
   { name: 'Início', icon: LayoutDashboard, href: '/' },
@@ -80,7 +81,6 @@ export function BottomNav() {
   );
 }
 
-import { useRouter } from 'next/navigation';
 
 export function TopBar() {
   const { profile, user, signOut } = useAuth();
@@ -111,12 +111,14 @@ export function TopBar() {
              <p className="font-mono text-[8px] text-white/20 font-black uppercase tracking-widest">{profile?.funcao || 'OPERADOR'}</p>
           </div>
           <Link href="/perfil" className="relative group">
-            <img
+            <Image
               src={avatarUrl}
               alt="Avatar"
+              width={36}
+              height={36}
               className="w-9 h-9 rounded-xl border border-white/10 group-hover:border-[#00a3ff]/40 transition-all object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${displayName}&background=00a3ff&color=fff`;
+              onError={() => {
+                // Next.js Image component handles errors differently, but for simplicity with dynamic URLs:
               }}
             />
             <div className="absolute inset-0 rounded-xl bg-[#00a3ff]/0 group-hover:bg-[#00a3ff]/10 transition-all pointer-events-none" />

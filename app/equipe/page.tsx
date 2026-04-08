@@ -431,7 +431,8 @@ function MemberModal({ isOpen, onClose, onSave, operator }: { isOpen: boolean; o
 
   useEffect(() => {
     if (operator) {
-      setFormData(operator);
+      // Somente atualiza se o operador for diferente do atual para evitar loops
+      setFormData(prev => prev.id === operator.id ? prev : operator);
     } else {
       setFormData({
         nome: '',
