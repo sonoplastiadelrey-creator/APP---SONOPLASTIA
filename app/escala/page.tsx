@@ -95,6 +95,21 @@ export default function EscalaPage() {
   const [saved, setSaved] = useState(false);
   const [tick, setTick] = useState(0);
   const { isAdmin, signOut } = useAuth();
+  const [availableMembers, setAvailableMembers] = useState<{ id: string; nome: string; funcao: string }[]>([]);
+
+  const fetchMembers = async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) throw error;
+      setAvailableMembers((data || []).map(d => ({
+        id: d.id,
+        nome: d.full_name || 'Sem nome',
+        funcao: d.funcao || 'SONOPLASTA'
+      })));
+    } catch (err) {
+      console.error('Error fetching members:', err);
+    }
+  };
 
   // --- Edit state ---
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -219,6 +234,7 @@ export default function EscalaPage() {
 
   useEffect(() => {
     fetchServices();
+    fetchMembers();
   }, []);
 
   useEffect(() => {
@@ -555,18 +571,16 @@ export default function EscalaPage() {
               onClick={() => setShowEditModal(false)}
               className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70]"
             />
-            <motion.div
-              initial={{ opacity: 0, y: 100 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 z-[80] max-h-[90vh] overflow-y-auto"
-              style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
-            >
-              <div className="h-px bg-gradient-to-r from-transparent via-[#ffb95f]/60 to-transparent" />
-              <div className="flex justify-center pt-4 pb-1">
-                <div className="w-10 h-1 rounded-full bg-white/20" />
-              </div>
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:p-8 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl pointer-events-auto border border-white/10 shadow-2xl relative"
+                style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
+              >
+                <div className="h-px bg-gradient-to-r from-transparent via-[#ffb95f]/60 to-transparent absolute top-0 left-0 right-0" />
 
               <div className="px-5 pb-10 pt-3">
                 <div className="flex items-center justify-between mb-6">
@@ -665,13 +679,25 @@ export default function EscalaPage() {
                               </button>
                             )}
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Nome do membro..."
-                            value={membro.nome}
-                            onChange={e => updateEditMembro(idx, 'nome', e.target.value)}
-                            className="w-full bg-black/30 border border-white/8 rounded-lg px-3 py-2.5 font-sans text-sm text-white placeholder:text-on-surface-variant/40 focus:outline-none focus:border-[#ffb95f]/40 transition-all"
-                          />
+                          <div className="relative">
+                            <select
+                              value={membro.nome}
+                              onChange={e => {
+                                updateEditMembro(idx, 'nome', e.target.value);
+                                const selected = availableMembers.find(m => m.nome === e.target.value);
+                                if (selected && selected.funcao) {
+                                  updateEditMembro(idx, 'funcao', selected.funcao);
+                                }
+                              }}
+                              className="w-full bg-black/30 border border-white/8 rounded-lg px-3 py-2.5 font-sans text-sm text-white appearance-none focus:outline-none focus:border-[#ffb95f]/40 transition-all"
+                            >
+                              <option value="" className="bg-[#15151f]">Selecionar membro do app...</option>
+                              {availableMembers.map(m => (
+                                <option key={m.id} value={m.nome} className="bg-[#15151f]">{m.nome} ({m.funcao})</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                          </div>
                           <div className="relative">
                             <select
                               value={membro.funcao}
@@ -723,6 +749,7 @@ export default function EscalaPage() {
                 </div>
               </div>
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
@@ -758,22 +785,18 @@ export default function EscalaPage() {
               className="fixed inset-0 bg-black/80 backdrop-blur-md z-[70]"
             />
 
-            <motion.div
-              initial={{ opacity: 0, y: 100 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 z-[80] max-h-[90vh] overflow-y-auto"
-              style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
-            >
-              {/* Glow top strip */}
-              <div className="h-px bg-gradient-to-r from-transparent via-[#00a3ff]/60 to-transparent" />
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-16 bg-[#00a3ff]/15 blur-2xl rounded-full pointer-events-none" />
-
-              {/* Handle */}
-              <div className="flex justify-center pt-4 pb-1">
-                <div className="w-10 h-1 rounded-full bg-white/20" />
-              </div>
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:p-8 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl pointer-events-auto border border-white/10 shadow-2xl relative"
+                style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
+              >
+                {/* Glow top strip */}
+                <div className="h-px bg-gradient-to-r from-transparent via-[#00a3ff]/60 to-transparent absolute top-0 left-0 right-0" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-16 bg-[#00a3ff]/15 blur-2xl rounded-full pointer-events-none" />
 
               <div className="px-5 pb-10 pt-3">
                 {/* Modal header */}
@@ -890,13 +913,25 @@ export default function EscalaPage() {
                               </button>
                             )}
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Nome do membro..."
-                            value={membro.nome}
-                            onChange={e => updateMembro(idx, 'nome', e.target.value)}
-                            className="w-full bg-black/30 border border-white/8 rounded-lg px-3 py-2.5 font-sans text-sm text-white placeholder:text-on-surface-variant/40 focus:outline-none focus:border-[#00a3ff]/40 transition-all"
-                          />
+                          <div className="relative">
+                            <select
+                              value={membro.nome}
+                              onChange={e => {
+                                updateMembro(idx, 'nome', e.target.value);
+                                const selected = availableMembers.find(m => m.nome === e.target.value);
+                                if (selected && selected.funcao) {
+                                  updateMembro(idx, 'funcao', selected.funcao);
+                                }
+                              }}
+                              className="w-full bg-black/30 border border-white/8 rounded-lg px-3 py-2.5 font-sans text-sm text-white appearance-none focus:outline-none focus:border-[#00a3ff]/40 transition-all"
+                            >
+                              <option value="" className="bg-[#15151f]">Selecionar membro do app...</option>
+                              {availableMembers.map(m => (
+                                <option key={m.id} value={m.nome} className="bg-[#15151f]">{m.nome} ({m.funcao})</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+                          </div>
                           <div className="relative">
                             <select
                               value={membro.funcao}
@@ -948,6 +983,7 @@ export default function EscalaPage() {
                 </div>
               </div>
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { format, differenceInSeconds, parseISO, isAfter, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import Link from 'next/link';
 
 // --- Types ---
 interface Culto {
@@ -514,9 +515,9 @@ function ScheduleCard({ culto, delay }: { culto: Culto; delay: number }) {
         ))}
       </div>
 
-      <button className="w-full mt-4 py-2 flex items-center justify-center gap-2 font-mono text-[9px] text-white/30 hover:text-[#00a3ff] transition-colors group/btn">
+      <Link href="/escala" className="w-full mt-4 py-2 flex items-center justify-center gap-2 font-mono text-[9px] text-white/30 hover:text-[#00a3ff] transition-colors group/btn">
         DETALHES DA ESCALA <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
-      </button>
+      </Link>
     </motion.div>
   );
 }
