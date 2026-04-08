@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { 
   Calendar, 
@@ -23,18 +23,15 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+
+const funcaoByInitial: Record<string, string> = {
+  'S': 'SONOPLASTA', 'D': 'OPERADOR DATASHOW', 'B': 'BACKUP', 'C': 'CÂMERA', 'L': 'LIGHTING',
+};
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 
-const days = [
-  { day: 'SEG', date: '23', active: false },
-  { day: 'TER', date: '24', active: false },
-  { day: 'QUA', date: '25', active: false },
-  { day: 'QUI', date: '26', active: true },
-  { day: 'SEX', date: '27', active: false },
-  { day: 'SAB', date: '28', active: false },
-  { day: 'DOM', date: '29', active: false },
-];
+import { format, startOfWeek, addDays, isSameDay, getWeek } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const roleColors: Record<string, { bg: string; text: string; glow: string; border: string }> = {
   S: { bg: 'bg-[#00a3ff]/15', text: 'text-[#00a3ff]', glow: 'shadow-[0_0_12px_#00a3ff55]', border: 'border-[#00a3ff]/30' },
@@ -149,7 +146,8 @@ export default function EscalaPage() {
       const scalesToInsert = editMembros.filter(m => m.nome || m.funcao).map(m => ({
         culto_id: editingService.id,
         funcao_no_culto: m.funcao || 'Sem função',
-        status: m.nome ? 'CONFIRMADO' : 'PENDENTE'
+        status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
+        membro_nome: m.nome || null
       }));
 
       if (scalesToInsert.length > 0) {
@@ -163,8 +161,9 @@ export default function EscalaPage() {
         setEditingService(null);
         fetchServices();
       }, 1200);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating service:', err);
+      alert('Erro ao atualizar escala: ' + (err.message || 'Erro desconhecido'));
     }
   };
 
@@ -197,15 +196,15 @@ export default function EscalaPage() {
 
       const formatted = data.map((c: any) => ({
         id: c.id,
-        title: c.titulo,
-        time: `${c.horario_inicio.slice(0, 5)}${c.horario_fim ? ' — ' + c.horario_fim.slice(0, 5) : ''}`,
-        live: c.ao_vivo,
+        title: c.titulo || 'Culto sem título',
+        time: `${(c.horario_inicio || '00:00:00').slice(0, 5)}${c.horario_fim ? ' — ' + c.horario_fim.slice(0, 5) : ''}`,
+        live: !!c.ao_vivo,
         color: c.tipo === 'JOVENS' ? 'amber' : c.tipo === 'ESPECIAL' ? 'green' : 'blue',
-        staff: c.escalas.map((e: any) => ({
-          name: e.operadores?.nome || 'A DEFINIR',
-          role: e.funcao_no_culto,
-          initial: e.funcao_no_culto.charAt(0).toUpperCase(),
-          empty: !e.operadores,
+        staff: (c.escalas || []).map((e: any) => ({
+          name: e.operadores?.nome || e.membro_nome || 'A DEFINIR',
+          role: e.funcao_no_culto || 'Sem função',
+          initial: (e.funcao_no_culto || 'A').charAt(0).toUpperCase(),
+          empty: !e.operadores && !e.membro_nome,
           avatar: e.operadores?.avatar_url || avatarImages[Math.floor(Math.random() * avatarImages.length)]
         }))
       }));
@@ -227,60 +226,91 @@ export default function EscalaPage() {
     return () => clearInterval(t);
   }, []);
 
-  const [culto, setCulto] = useState('');
-  const [data, setData] = useState('');
-  const [horarioInicio, setHorarioInicio] = useState('');
-  const [horarioFim, setHorarioFim] = useState('');
+  const [culto, setCulto] = useState('Domingo Manhã');
+  const [currentWeek, setCurrentWeek] = useState(new Date());
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(currentWeek, { weekStartsOn: 1 });
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(start, i);
+      return {
+        day: format(d, 'EEE', { locale: ptBR }).toUpperCase().replace('.', ''),
+        date: format(d, 'dd'),
+        active: isSameDay(d, new Date()),
+        fullDate: d
+      };
+    });
+  }, [currentWeek]);
+
+  const [data, setData] = useState(new Date().toISOString().split('T')[0]);
+  const [horarioInicio, setHorarioInicio] = useState('09:00');
+  const [horarioFim, setHorarioFim] = useState('11:30');
   const [aoVivo, setAoVivo] = useState(false);
-  const [membros, setMembros] = useState([{ nome: '', funcao: '' }]);
+  const [membros, setMembros] = useState([
+    { nome: '', funcao: 'SONOPLASTA' },
+    { nome: '', funcao: 'OPERADOR DATASHOW' }
+  ]);
 
   const addMembro = () => setMembros([...membros, { nome: '', funcao: '' }]);
   const removeMembro = (idx: number) => setMembros(membros.filter((_, i) => i !== idx));
   const updateMembro = (idx: number, field: 'nome' | 'funcao', value: string) =>
     setMembros(membros.map((m, i) => i === idx ? { ...m, [field]: value } : m));
 
-  const funcaoByInitial: Record<string, string> = {
-    'S': 'SONOPLASTA', 'D': 'OPERADOR DATASHOW', 'B': 'BACKUP', 'C': 'CÂMERA', 'L': 'LIGHTING',
-  };
-
   const handleSave = async () => {
-    if (!culto || !horarioInicio) return;
+    console.log('Tentando salvar escala:', { culto, data, horarioInicio, membros });
     
     try {
       const { data: newCulto, error: cultoError } = await supabase
         .from('cultos')
         .insert({
           titulo: culto,
-          data: data || new Date().toISOString().split('T')[0],
+          data: data,
           horario_inicio: horarioInicio,
           horario_fim: horarioFim || null,
           ao_vivo: aoVivo,
-          tipo: culto === 'Sábado (Jovens)' ? 'JOVENS' : culto === 'Especial' ? 'ESPECIAL' : 'REGULAR'
+          tipo: (culto.includes('Jovens') || culto.includes('Sábado')) ? 'JOVENS' : culto.includes('Especial') ? 'ESPECIAL' : 'REGULAR'
         })
         .select()
         .single();
 
-      if (cultoError) throw cultoError;
+      if (cultoError) {
+        console.error('Erro ao inserir culto:', cultoError);
+        throw cultoError;
+      }
+
+      console.log('Culto criado com ID:', newCulto.id);
 
       const scalesToInsert = membros.filter(m => m.nome || m.funcao).map(m => ({
         culto_id: newCulto.id,
         funcao_no_culto: m.funcao || 'Sem função',
-        status: m.nome ? 'CONFIRMADO' : 'PENDENTE'
+        status: m.nome ? 'CONFIRMADO' : 'PENDENTE',
+        membro_nome: m.nome || null
       }));
 
       if (scalesToInsert.length > 0) {
-        await supabase.from('escalas').insert(scalesToInsert);
+        console.log('Inserindo escalas:', scalesToInsert);
+        const { error: escalasError } = await supabase.from('escalas').insert(scalesToInsert);
+        if (escalasError) {
+          console.error('Erro ao inserir escalas:', escalasError);
+          throw escalasError;
+        }
       }
 
       setSaved(true);
       setTimeout(() => {
         setSaved(false); 
         setShowModal(false);
-        setCulto(''); setData(''); setHorarioInicio(''); setHorarioFim(''); setAoVivo(false); setMembros([{ nome: '', funcao: '' }]);
+        setCulto('Domingo Manhã'); 
+        setData(new Date().toISOString().split('T')[0]); 
+        setHorarioInicio('09:00'); 
+        setHorarioFim('11:30'); 
+        setAoVivo(false); 
+        setMembros([{ nome: '', funcao: 'SONOPLASTA' }, { nome: '', funcao: 'OPERADOR DATASHOW' }]);
         fetchServices();
       }, 1200);
-    } catch (err) {
-      console.error('Error saving service:', err);
+    } catch (err: any) {
+      console.error('Critical Err:', err);
+      alert('Erro ao salvar escala: ' + (err.message || err.details || 'Erro desconhecido. Verifique o console.'));
     }
   };
 
@@ -308,8 +338,8 @@ export default function EscalaPage() {
                 <p className="font-mono text-[10px] text-[#00a3ff] uppercase tracking-[0.25em] mb-1">
                   PERÍODO ATUAL
                 </p>
-                <h2 className="font-sans font-black text-2xl text-white leading-none tracking-tight">
-                  Outubro 2023
+                <h2 className="font-sans font-black text-2xl text-white leading-none tracking-tight capitalize">
+                  {format(currentWeek, 'MMMM yyyy', { locale: ptBR })}
                 </h2>
               </motion.div>
               <div className="flex flex-col items-end gap-3">
@@ -329,7 +359,7 @@ export default function EscalaPage() {
               {[
                 { icon: Calendar, label: `${services.length} Cultos`, color: 'text-[#00a3ff]' },
                 { icon: Radio, label: `${services.filter(s => s.live).length} Ao Vivo`, color: 'text-[#4ae176]' },
-                { icon: Zap, label: 'Semana 42', color: 'text-[#ffb95f]' },
+                { icon: Zap, label: `Semana ${getWeek(currentWeek)}`, color: 'text-[#ffb95f]' },
               ].map((s) => (
                 <div key={s.label} className="flex items-center gap-1.5 bg-white/5 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
                   <s.icon className={cn('w-3 h-3', s.color)} />
@@ -341,7 +371,7 @@ export default function EscalaPage() {
         </div>
 
         <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-2 px-0 mb-6">
-          {days.map((d, idx) => (
+          {weekDays.map((d, idx) => (
             <motion.div
               key={d.date}
               initial={{ opacity: 0, scale: 0.8 }}
@@ -698,21 +728,23 @@ export default function EscalaPage() {
       </AnimatePresence>
 
       {/* ── FAB ───────────────────────────────────────────── */}
-      <motion.button
-        onClick={() => setShowModal(true)}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
-        className="fixed bottom-24 right-6 w-14 h-14 rounded-2xl flex items-center justify-center z-[60] overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #00a3ff, #0070ff)' }}
-      >
-        <div className="absolute inset-0 shadow-[0_0_30px_rgba(0,163,255,0.7)]" />
-        <motion.div
-          className="absolute inset-0 bg-white/20"
-          animate={{ opacity: [0.1, 0.3, 0.1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        />
-        <Edit className="w-6 h-6 text-white relative z-10 drop-shadow-lg" />
-      </motion.button>
+      {isAdmin && (
+        <motion.button
+          onClick={() => setShowModal(true)}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          className="fixed bottom-24 right-6 w-14 h-14 rounded-2xl flex items-center justify-center z-[60] overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #00a3ff, #0070ff)' }}
+        >
+          <div className="absolute inset-0 shadow-[0_0_30px_rgba(0,163,255,0.7)]" />
+          <motion.div
+            className="absolute inset-0 bg-white/20"
+            animate={{ opacity: [0.1, 0.3, 0.1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          <Edit className="w-6 h-6 text-white relative z-10 drop-shadow-lg" />
+        </motion.button>
+      )}
 
       {/* ── CREATION MODAL ─────────────────────────────────── */}
       <AnimatePresence>

@@ -41,15 +41,16 @@ export default function LoginPage() {
 
     try {
       const { data, error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
       });
 
       if (loginError) throw loginError;
       
       router.push('/');
     } catch (err: any) {
-      setError('Credenciais inválidas ou acesso negado.');
+      console.error("Login Falhou:", err);
+      setError('Credenciais inválidas ou acesso negado. Verifique também sua conexão internet.');
     } finally {
       setLoading(false);
     }
