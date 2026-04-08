@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { 
   Clock, 
@@ -11,228 +11,566 @@ import {
   RefreshCcw,
   Mic2,
   FileText,
-  UserPlus
+  UserPlus,
+  Zap,
+  Activity,
+  ShieldCheck,
+  ChevronRight,
+  Monitor,
+  Wifi,
+  BatteryMedium,
+  LayoutDashboard,
+  Play,
+  Check,
+  X,
+  Volume2,
+  Mic,
+  Cable,
+  Headphones,
+  Settings
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import { format, differenceInSeconds, parseISO, isAfter, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+// --- Types ---
+interface Culto {
+  id: string;
+  titulo: string;
+  tipo: string;
+  data: string;
+  horario_inicio: string;
+  status: string;
+  ao_vivo: boolean;
+  escalas?: any[];
+}
+
+interface HardwareStatus {
+  id: string;
+  nome: string;
+  status: string;
+  valor_percentual: number;
+  dado_extra_esq: string;
+  dado_extra_dir: string;
+  tipo: string;
+}
+
+// --- Visual Helpers ---
+function ParticleOrb({ x, y, color, delay, size = 180 }: { x: string; y: string; color: string; delay: number; size?: number }) {
+  return (
+    <motion.div
+      className="absolute rounded-full pointer-events-none"
+      style={{ left: x, top: y, width: size, height: size, background: color, filter: 'blur(60px)', opacity: 0 }}
+      animate={{ opacity: [0, 0.15, 0], scale: [0.8, 1.2, 0.8] }}
+      transition={{ duration: 10, delay, repeat: Infinity, ease: 'easeInOut' }}
+    />
+  );
+}
 
 export default function Dashboard() {
+  const [nextCulto, setNextCulto] = useState<Culto | null>(null);
+  const [weeklySchedule, setWeeklySchedule] = useState<Culto[]>([]);
+  const [hardware, setHardware] = useState<HardwareStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [showChecklist, setShowChecklist] = useState(false);
+
+  // Fetch initial data
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      // 1. Next Culto (for countdown)
+      const { data: cultos, error: cultosError } = await supabase
+        .from('cultos')
+        .select('*, escalas(*, operadores(*))')
+        .gte('data', today)
+        .order('data', { ascending: true })
+        .order('horario_inicio', { ascending: true })
+        .limit(4);
+
+      if (cultosError) throw cultosError;
+
+      if (cultos && cultos.length > 0) {
+        setNextCulto(cultos[0]);
+        setWeeklySchedule(cultos);
+      }
+
+      // 2. Hardware Status
+      const { data: hw, error: hwError } = await supabase
+        .from('hardware_status')
+        .select('*')
+        .order('tipo', { ascending: true });
+
+      if (hwError) throw hwError;
+      setHardware(hw || []);
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Subscribe to Hardware changes
+    const hwSubscription = supabase
+      .channel('hardware-updates')
+      .on('postgres_changes' as any, { event: '*', table: 'hardware_status' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(hwSubscription);
+    };
+  }, []);
+
+  // Countdown Ticker
+  useEffect(() => {
+    if (!nextCulto) return;
+
+    const timer = setInterval(() => {
+      const targetDate = parseISO(`${nextCulto.data}T${nextCulto.horario_inicio}`);
+      const diff = differenceInSeconds(targetDate, new Date());
+      setTimeLeft(diff > 0 ? diff : 0);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [nextCulto]);
+
+  const timeDisplay = useMemo(() => {
+    const days = Math.floor(timeLeft / (3600 * 24));
+    const hours = Math.floor((timeLeft % (3600 * 24)) / 3600);
+    const mins = Math.floor((timeLeft % 3600) / 60);
+    const secs = timeLeft % 60;
+    return { days, hours, mins, secs };
+  }, [timeLeft]);
+
   return (
     <AppLayout>
-      <div className="space-y-6">
-        {/* Próximo Culto Widget */}
+      <div className="space-y-8 -mt-2">
+        
+        {/* ── HERO BANNER: PRÓXIMO CULTO ─────────────────── */}
         <motion.section 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary-container/20 to-surface-container border border-primary/20 p-6 md:p-8"
+          className="relative h-64 md:h-52 overflow-hidden rounded-3xl border border-white/10 group shadow-2xl"
         >
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div>
-              <h2 className="font-mono text-xs text-primary-container font-bold uppercase tracking-[0.2em] mb-1">Próximo Culto</h2>
-              <h3 className="font-sans text-3xl font-black text-on-surface">DOMINGO MANHÃ</h3>
-              <p className="font-mono text-on-surface-variant text-sm mt-2 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                09:00 - Celebração da Família
+          {/* Background Image & Overlay */}
+          <div className="absolute inset-0 bg-[#0a0a0f]" />
+          <img 
+            src="/_next/image?url=%2Fdashboard_hero_bg_1775591398846_1775593207342.png&w=1920&q=75" 
+            className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-[10s]"
+            alt="Hero Background"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#00a3ff]/10 via-transparent to-[#4ae176]/5" />
+          
+          <ParticleOrb x="10%" y="-20%" color="#00a3ff" delay={0} size={250} />
+          <ParticleOrb x="70%" y="40%" color="#4ae176" delay={3} size={200} />
+
+          {/* Content */}
+          <div className="absolute inset-0 flex flex-col md:flex-row justify-between items-center px-8 pb-8 pt-6">
+            <div className="text-center md:text-left">
+              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                <ShieldCheck className="w-4 h-4 text-[#00a3ff]" />
+                <span className="font-mono text-[10px] text-[#00a3ff] uppercase tracking-[0.3em] font-black">Sistema Operacional Alpha</span>
+              </div>
+              <h1 className="font-sans font-black text-3xl md:text-4xl text-white tracking-tighter leading-none mb-3">
+                {nextCulto ? nextCulto.titulo.toUpperCase() : 'AGUARDANDO...'}
+              </h1>
+              <p className="font-mono text-white/60 text-xs flex items-center justify-center md:justify-start gap-3">
+                <Clock className="w-3.5 h-3.5 text-[#4ae176]" />
+                {nextCulto 
+                  ? `${format(parseISO(nextCulto.data), "EEEE, dd 'de' MMMM", { locale: ptBR })} — ${nextCulto.horario_inicio.slice(0,5)}` 
+                  : '--'}
               </p>
             </div>
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <span className="font-sans text-4xl font-black text-primary-container">02</span>
-                <span className="font-mono text-[10px] text-on-surface-variant uppercase">Dias</span>
-              </div>
-              <span className="text-outline-variant text-3xl font-light self-start mt-1">:</span>
-              <div className="flex flex-col items-center">
-                <span className="font-sans text-4xl font-black text-primary-container">14</span>
-                <span className="font-mono text-[10px] text-on-surface-variant uppercase">Horas</span>
-              </div>
-              <span className="text-outline-variant text-3xl font-light self-start mt-1">:</span>
-              <div className="flex flex-col items-center">
-                <span className="font-sans text-4xl font-black text-primary-container">45</span>
-                <span className="font-mono text-[10px] text-on-surface-variant uppercase">Min</span>
-              </div>
+
+            {/* Countdown Ticker */}
+            <div className="flex gap-4 md:gap-6 bg-white/5 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10 mt-4 md:mt-0 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+               <TimeBlock value={timeDisplay.days} label="DIAS" />
+               <span className="text-white/20 text-2xl font-black mt-1">:</span>
+               <TimeBlock value={timeDisplay.hours} label="HRS" />
+               <span className="text-white/20 text-2xl font-black mt-1">:</span>
+               <TimeBlock value={timeDisplay.mins} label="MIN" />
+               <span className="text-white/20 text-2xl font-black mt-1">:</span>
+               <TimeBlock value={timeDisplay.secs} label="SEG" color="#00a3ff" />
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 h-1 bg-primary-container w-2/3"></div>
+          <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-[#00a3ff] to-[#4ae176] w-full origin-left" style={{ transform: `scaleX(${loading ? 0.3 : 1})`, transition: 'transform 2s ease' }} />
         </motion.section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ESCALA DA SEMANA */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-sans text-xl font-bold tracking-tight text-on-surface">ESCALA DA SEMANA</h2>
-              <span className="font-mono text-[10px] text-on-surface-variant bg-surface-container-high px-3 py-1 rounded-full border border-outline-variant/10">NOVEMBRO - SEMANA 03</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* ── ESCALA DA SEMANA (LISTA REAL) ──────────────── */}
+          <div className="lg:col-span-8 space-y-4">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-[#00a3ff]" />
+                <h2 className="font-sans text-xl font-black tracking-tight text-white uppercase italic">Escala Atual</h2>
+              </div>
+              <span className="font-mono text-[9px] text-white/40 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 uppercase tracking-widest font-black">
+                {format(new Date(), "'SEMANA' w", { locale: ptBR })}
+              </span>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Quarta-Feira */}
-              <ScheduleCard 
-                date="15 NOV" 
-                title="QUARTA-FEIRA" 
-                status="Completo"
-                statusType="success"
-                staff={[
-                  { role: 'SONOPLASTA', name: 'Ricardo Silva', icon: 'mix' },
-                  { role: 'DATASHOW', name: 'Ana Paula', icon: 'screen' },
-                  { role: 'BACKUP', name: 'Marcos Oliveira', icon: 'backup' },
-                ]}
-              />
-              {/* Sábado */}
-              <ScheduleCard 
-                date="18 NOV" 
-                title="SÁBADO (JOVENS)" 
-                status="Pendente"
-                statusType="warning"
-                staff={[
-                  { role: 'SONOPLASTA', name: 'Thiago Souza', icon: 'mix' },
-                  { role: 'DATASHOW', name: 'A DEFINIR', icon: 'screen', warning: true },
-                  { role: 'BACKUP', name: 'Gabriel Lima', icon: 'backup' },
-                ]}
-              />
-              {/* Domingo Manhã */}
-              <ScheduleCard 
-                date="19 NOV" 
-                title="DOMINGO MANHÃ" 
-                status="Confirmado"
-                statusType="success"
-                highlight
-                staff={[
-                  { role: 'SONOPLASTA', name: 'Bruno Mello', icon: 'mix', confirmed: true },
-                  { role: 'DATASHOW', name: 'Carla Santos', icon: 'screen', confirmed: true },
-                  { role: 'BACKUP', name: 'PENDENTE', icon: 'backup', warning: true },
-                ]}
-              />
-              {/* Domingo Noite */}
-              <ScheduleCard 
-                date="19 NOV" 
-                title="DOMINGO NOITE" 
-                status="Crítico"
-                statusType="error"
-                staff={[
-                  { role: 'SONOPLASTA', name: 'VAGO', icon: 'mix', error: true },
-                  { role: 'DATASHOW', name: 'Lucas Peixoto', icon: 'screen' },
-                  { role: 'BACKUP', name: 'FALTA', icon: 'backup', error: true },
-                ]}
-              />
+              {loading ? (
+                [1,2,3,4].map(i => <div key={i} className="h-48 rounded-2xl bg-white/5 animate-pulse" />)
+              ) : weeklySchedule.map((culto, idx) => (
+                <ScheduleCard key={culto.id} culto={culto} delay={idx * 0.1} />
+              ))}
             </div>
           </div>
 
-          {/* Hardware Status Sidebar */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-sans text-xl font-bold tracking-tight text-on-surface uppercase">Hardware</h2>
-              <RefreshCcw className="w-5 h-5 text-primary-container cursor-pointer hover:rotate-180 transition-transform duration-500" />
+          {/* ── MONITOR DE HARDWARE (REAL-TIME) ───────────── */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="flex items-center justify-between px-2">
+               <div className="flex items-center gap-3">
+                <Monitor className="w-5 h-5 text-[#4ae176]" />
+                <h2 className="font-sans text-xl font-black tracking-tight text-white uppercase italic">Monitoring</h2>
+              </div>
+              <button 
+                onClick={fetchData}
+                className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all active:rotate-180 duration-500"
+              >
+                <RefreshCcw className="w-4 h-4 text-[#4ae176]" />
+              </button>
             </div>
             
-            <div className="bg-surface-container-low p-6 rounded-lg border border-outline-variant/10 space-y-6">
-              <HardwareMetric label="Console Principal" status="ONLINE" value={98} color="secondary" subLeft="Latency: 2ms" subRight="Temp: 38°C" />
-              <HardwareMetric label="Rede Dante" status="ESTÁVEL" value={85} color="secondary" subLeft="Sync Status: Locked" subRight="Devices: 12/12" />
+            <div className="bg-surface-container-low/40 backdrop-blur-md p-6 rounded-3xl border border-white/5 shadow-xl space-y-8 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#4ae176]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               
-              <div className="space-y-4">
-                <p className="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest border-b border-outline-variant/10 pb-2">Baterias Mics</p>
-                <BatteryItem label="MIC 01 (Líder)" value={90} color="secondary" />
-                <BatteryItem label="MIC 02 (Pregador)" value={45} color="tertiary" />
+              {loading ? (
+                 <div className="space-y-6">
+                    <div className="h-10 bg-white/5 rounded-xl animate-pulse" />
+                    <div className="h-10 bg-white/5 rounded-xl animate-pulse" />
+                    <div className="h-10 bg-white/5 rounded-xl animate-pulse" />
+                 </div>
+              ) : hardware.map((hw, idx) => (
+                <HardwareMetric 
+                  key={hw.id} 
+                  label={hw.nome} 
+                  status={hw.status} 
+                  value={hw.valor_percentual} 
+                  color={hw.status === 'ONLINE' || hw.status === 'ESTÁVEL' ? 'success' : 'warning'} 
+                  subLeft={hw.dado_extra_esq} 
+                  subRight={hw.dado_extra_dir}
+                  delay={idx * 0.1}
+                />
+              ))}
+
+              <div className="pt-4 border-t border-white/5">
+                 <div className="flex items-center gap-2 mb-4">
+                    <BatteryMedium className="w-4 h-4 text-[#ffb95f]" />
+                    <span className="font-mono text-[10px] text-white/40 uppercase tracking-widest font-black">Baterias Microfones</span>
+                 </div>
+                 <div className="space-y-4">
+                    <BatteryItem label="Líder (UHF-1)" value={94} color="success" />
+                    <BatteryItem label="Palco (UHF-2)" value={62} color="success" />
+                    <BatteryItem label="Retorno (IEM)" value={28} color="warning" />
+                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <QuickActionButton icon={FileText} label="Ver Roteiro" />
-              <QuickActionButton icon={UserPlus} label="Pedir Substituição" />
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 gap-4">
+              <QuickActionButton 
+                icon={Play} 
+                label="Iniciar Culto" 
+                color="#00a3ff" 
+                onClick={() => setShowChecklist(true)}
+              />
+              <QuickActionButton 
+                icon={UserPlus} 
+                label="Substituir" 
+                color="#ff6b6b" 
+              />
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── CHECKLIST MODAL ─────────────────── */}
+      <AnimatePresence>
+        {showChecklist && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowChecklist(false)}
+              className="absolute inset-0 bg-[#0a0a0f]/90 backdrop-blur-xl"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#14141a] border border-white/10 rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden"
+            >
+              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-primary-container/5 via-transparent to-transparent">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-[#00a3ff]/20 flex items-center justify-center border border-[#00a3ff]/30 shadow-[0_0_20px_rgba(0,163,255,0.2)]">
+                       <Settings className="w-6 h-6 text-[#00a3ff]" />
+                    </div>
+                    <div>
+                       <h2 className="font-sans font-black text-2xl text-white tracking-tight uppercase italic">🎚️ CHECKLIST AO VIVO</h2>
+                       <p className="font-mono text-[9px] text-white/40 uppercase tracking-[0.3em] font-black">Procedimento Técnico Operacional</p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setShowChecklist(false)}
+                   className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all text-white/40 hover:text-white"
+                 >
+                   <X className="w-5 h-5" />
+                 </button>
+              </div>
+
+              <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+                 <ChecklistSection 
+                   title="Antes / Setup" 
+                   icon={Cable} 
+                   color="#00a3ff"
+                   items={[
+                     "Mesa de som ligada",
+                     "Microfones testados",
+                     "Cabos conferidos",
+                     "Retornos (IEM) ok",
+                     "Retorno dos músicos",
+                     "Datashow pronto"
+                   ]} 
+                 />
+                 <ChecklistSection 
+                   title="Durante / Op" 
+                   icon={Volume2} 
+                   color="#4ae176"
+                   items={[
+                     "Som equilibrado",
+                     "Sem microfonia",
+                     "Voz clara/nítida"
+                   ]} 
+                 />
+                 <ChecklistSection 
+                   title="Depois / Post" 
+                   icon={Headphones} 
+                   color="#ffb95f"
+                   items={[
+                     "Equips. desligados",
+                     "Mics guardados",
+                     "Problemas registrados"
+                   ]} 
+                 />
+              </div>
+
+              <div className="p-8 bg-white/2 border-t border-white/5 flex justify-between items-center">
+                 <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#4ae176] shadow-[0_0_8px_#4ae176] animate-pulse" />
+                    <span className="font-mono text-[9px] text-white/40 uppercase font-black tracking-widest leading-none">Console Operacional Blue-X</span>
+                 </div>
+                 <button 
+                   onClick={() => setShowChecklist(false)}
+                   className="px-8 py-4 bg-[#00a3ff] rounded-2xl font-mono text-[11px] font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_20px_rgba(0,163,255,0.3)] hover:scale-105 transition-transform"
+                 >
+                   FINALIZAR CHECKLIST
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AppLayout>
   );
 }
 
-function ScheduleCard({ date, title, status, statusType, staff, highlight }: any) {
+// --- Subcomponents ---
+
+function ChecklistSection({ title, items, icon: Icon, color }: any) {
   return (
-    <div className={cn(
-      "bg-surface-container-low p-5 rounded-lg border border-outline-variant/10 hover:bg-surface-container transition-colors group",
-      highlight && "border-2 border-primary-container/30 shadow-lg"
-    )}>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <span className="font-mono text-[10px] text-on-surface-variant uppercase font-bold">{date}</span>
-          <h4 className="font-sans font-bold text-on-surface">{title}</h4>
-        </div>
-        <span className={cn(
-          "px-2 py-0.5 font-mono text-[10px] font-bold rounded border uppercase",
-          statusType === 'success' && "bg-secondary/10 text-secondary border-secondary/20",
-          statusType === 'warning' && "bg-tertiary/10 text-tertiary border-tertiary/20",
-          statusType === 'error' && "bg-error/10 text-error border-error/20",
-        )}>
-          {status}
-        </span>
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+         <Icon className="w-4 h-4" style={{ color }} />
+         <h3 className="font-mono text-[10px] font-black uppercase tracking-widest" style={{ color }}>{title}</h3>
       </div>
-      <div className="space-y-3">
-        {staff.map((s: any, idx: number) => (
-          <div key={idx} className={cn(
-            "flex items-center justify-between p-2 rounded",
-            idx === 0 && highlight ? "bg-primary-container/5" : ""
-          )}>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-xs text-on-surface-variant">{s.role}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                "font-sans text-sm",
-                s.confirmed ? "font-black text-on-surface" : "text-on-surface",
-                s.warning && "text-tertiary font-bold",
-                s.error && "text-error font-black uppercase text-xs"
-              )}>
-                {s.name}
-              </span>
-              {s.confirmed && <CheckCircle2 className="w-3 h-3 text-secondary" />}
-              {s.warning && <AlertTriangle className="w-3 h-3 text-tertiary animate-pulse" />}
-              {s.error && <XCircle className="w-3 h-3 text-error" />}
-            </div>
-          </div>
+      <div className="space-y-4">
+        {items.map((item: string, i: number) => (
+          <ChecklistItem key={i} label={item} />
         ))}
       </div>
     </div>
   );
 }
 
-function HardwareMetric({ label, status, value, color, subLeft, subRight }: any) {
+function ChecklistItem({ label }: { label: string }) {
+  const [checked, setChecked] = useState(false);
+  
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-xs font-mono uppercase">
-        <span className="text-on-surface">{label}</span>
-        <span className={cn("font-bold", color === 'secondary' ? "text-secondary" : "text-tertiary")}>{status}</span>
+    <div 
+      onClick={() => setChecked(!checked)}
+      className={cn(
+        "flex items-center gap-3 cursor-pointer group transition-all",
+        checked ? "opacity-100" : "opacity-60 hover:opacity-100"
+      )}
+    >
+      <div className={cn(
+        "w-5 h-5 rounded-lg border flex items-center justify-center transition-all",
+        checked ? "bg-[#4ae176] border-[#4ae176] shadow-[0_0_10px_rgba(74,225,118,0.3)]" : "bg-black/40 border-white/10 group-hover:border-white/20"
+      )}>
+        {checked && <Check className="w-3 h-3 text-black stroke-[4px]" />}
       </div>
-      <div className="h-2 bg-surface-container-lowest rounded-full overflow-hidden">
-        <div 
+      <span className={cn(
+        "font-sans text-xs font-bold transition-all",
+        checked ? "text-white/40 line-through" : "text-white group-hover:translate-x-1"
+      )}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function TimeBlock({ value, label, color = "white" }: any) {
+  return (
+    <div className="flex flex-col items-center min-w-[3rem]">
+      <motion.span 
+        key={value}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="font-sans text-3xl font-black tabular-nums" 
+        style={{ color: value === 0 ? 'rgba(255,255,255,0.2)' : color }}
+      >
+        {String(value).padStart(2, '0')}
+      </motion.span>
+      <span className="font-mono text-[8px] text-white/40 uppercase tracking-widest font-black leading-none">{label}</span>
+    </div>
+  );
+}
+
+function ScheduleCard({ culto, delay }: { culto: Culto; delay: number }) {
+  const isToday = culto.data === new Date().toISOString().split('T')[0];
+  
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay }}
+      whileHover={{ y: -5 }}
+      className={cn(
+        "bg-surface-container-low/40 backdrop-blur-sm p-5 rounded-3xl border border-white/5 transition-all group relative overflow-hidden",
+        isToday && "border-[#00a3ff]/40 shadow-[0_10px_30px_rgba(0,163,255,0.15)] bg-[#00a3ff]/5"
+      )}
+    >
+      {isToday && (
+        <div className="absolute top-0 right-0 p-3">
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-2 h-2 rounded-full bg-[#00a3ff]"
+          />
+        </div>
+      )}
+
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <span className="font-mono text-[9px] text-white/30 uppercase font-black tracking-widest">
+            {format(parseISO(culto.data), "dd MMM", { locale: ptBR })}
+          </span>
+          <h4 className="font-sans font-black text-white text-lg tracking-tight leading-tight group-hover:text-[#00a3ff] transition-colors">
+            {culto.titulo.toUpperCase()}
+          </h4>
+        </div>
+        <div className={cn(
+          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border",
+          culto.status === 'AGENDADO' ? "bg-white/5 text-white/60 border-white/10" : "bg-[#4ae176]/10 text-[#4ae176] border-[#4ae176]/30"
+        )}>
+          {culto.status}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {culto.escalas?.slice(0, 3).map((esc, idx) => (
+          <div key={esc.id} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0 hover:bg-white/2 rounded-lg px-2 transition-colors">
+            <span className="font-mono text-[10px] text-white/40 uppercase font-bold">{esc.funcao_no_culto}</span>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "font-sans text-xs font-bold",
+                esc.status === 'CONFIRMADO' ? "text-white" : "text-white/40 italic"
+              )}>
+                {esc.operadores?.nome || 'VAGO'}
+              </span>
+              {esc.status === 'CONFIRMADO' ? (
+                <CheckCircle2 className="w-3 h-3 text-[#4ae176]" />
+              ) : (
+                <Clock className="w-3 h-3 text-white/20" />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button className="w-full mt-4 py-2 flex items-center justify-center gap-2 font-mono text-[9px] text-white/30 hover:text-[#00a3ff] transition-colors group/btn">
+        DETALHES DA ESCALA <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+      </button>
+    </motion.div>
+  );
+}
+
+function HardwareMetric({ label, status, value, color, subLeft, subRight, delay }: any) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay }}
+      className="space-y-2 group/metric"
+    >
+      <div className="flex justify-between text-[10px] font-mono uppercase font-black tracking-wider">
+        <span className="text-white/40 group-hover/metric:text-white transition-colors">{label}</span>
+        <span className={cn(color === 'success' ? "text-[#4ae176]" : "text-[#ffb95f]")}>{status}</span>
+      </div>
+      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${value}%` }}
+          transition={{ duration: 1.5, ease: 'easeOut' }}
           className={cn(
-            "h-full transition-all duration-1000",
-            color === 'secondary' ? "bg-secondary shadow-[0_0_8px_#4ae176]" : "bg-tertiary shadow-[0_0_8px_#ffb95f]"
+            "h-full rounded-full relative",
+            color === 'success' ? "bg-gradient-to-r from-[#4ae176]/50 to-[#4ae176] shadow-[0_0_15px_rgba(74,225,118,0.4)]" : "bg-gradient-to-r from-[#ffb95f]/50 to-[#ffb95f]"
           )} 
-          style={{ width: `${value}%` }}
-        ></div>
+        />
       </div>
-      <div className="flex justify-between font-mono text-[10px] text-on-surface-variant">
+      <div className="flex justify-between font-mono text-[8px] text-white/20 uppercase font-bold group-hover/metric:text-white/40 transition-colors">
         <span>{subLeft}</span>
         <span>{subRight}</span>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function BatteryItem({ label, value, color }: any) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="font-mono text-xs text-on-surface">{label}</span>
-      <div className="flex items-center gap-2">
-        <div className="w-10 h-4 border border-outline-variant/30 rounded-sm relative p-0.5">
-          <div 
+    <div className="flex justify-between items-center group/bat">
+      <span className="font-mono text-[10px] text-white/40 group-hover/bat:text-white/60 transition-colors">{label}</span>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-3 border border-white/10 rounded-[2px] relative p-[1px] bg-black/20">
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${value}%` }}
             className={cn(
-              "h-full rounded-sm",
-              color === 'secondary' ? "bg-secondary" : "bg-tertiary"
+              "h-full rounded-[1px]",
+              value > 30 ? "bg-[#4ae176]" : "bg-[#ff6b6b] shadow-[0_0_10px_rgba(255,107,107,0.5)]"
             )} 
-            style={{ width: `${value}%` }}
-          ></div>
+          />
         </div>
-        <span className={cn("font-mono text-[10px] font-bold", color === 'secondary' ? "text-on-surface" : "text-tertiary")}>
+        <span className={cn(
+          "font-mono text-[10px] font-black w-8 text-right",
+          value > 30 ? "text-white/60" : "text-[#ff6b6b]"
+        )}>
           {value}%
         </span>
       </div>
@@ -240,11 +578,17 @@ function BatteryItem({ label, value, color }: any) {
   );
 }
 
-function QuickActionButton({ icon: Icon, label }: any) {
+function QuickActionButton({ icon: Icon, label, color, onClick }: any) {
   return (
-    <button className="flex flex-col items-center justify-center p-4 bg-surface-container border border-outline-variant/10 rounded-lg hover:bg-surface-container-high transition-all active:scale-95 group">
-      <Icon className="w-6 h-6 text-primary-container mb-2 group-hover:scale-110 transition-transform" />
-      <span className="font-mono text-[10px] uppercase font-bold text-on-surface">{label}</span>
-    </button>
+    <motion.button 
+      whileHover={{ scale: 1.05, y: -2 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={onClick}
+      className="flex flex-col items-center justify-center p-4 bg-surface-container-low/40 backdrop-blur-md border border-white/5 rounded-2xl hover:bg-white/5 transition-all group overflow-hidden relative w-full"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent to-transparent group-hover:from-white/5 transition-all" />
+      <Icon className="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" style={{ color }} />
+      <span className="font-mono text-[10px] uppercase font-black text-white/40 group-hover:text-white/80 tracking-widest">{label}</span>
+    </motion.button>
   );
 }

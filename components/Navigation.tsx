@@ -3,8 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, HardDrive, Users, User } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, HardDrive, Users, User, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/AuthProvider';
 
 const navItems = [
   { name: 'Início', icon: LayoutDashboard, href: '/' },
@@ -30,13 +31,13 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-4 px-6 py-3 transition-colors font-mono text-sm uppercase tracking-wider",
+                "flex items-center gap-4 px-6 py-3 transition-all font-mono text-sm uppercase tracking-wider border-l-4",
                 isActive 
-                  ? "bg-primary-container/10 text-primary-container border-l-4 border-primary-container" 
-                  : "text-on-surface/70 hover:text-on-surface hover:bg-surface-container"
+                  ? "bg-primary-container/10 text-primary-container border-primary-container" 
+                  : "text-on-surface/70 hover:text-on-surface hover:bg-surface-container border-transparent"
               )}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-5 h-5 transition-transform group-hover:scale-110" />
               {item.name}
             </Link>
           );
@@ -79,22 +80,55 @@ export function BottomNav() {
   );
 }
 
+import { useRouter } from 'next/navigation';
+
 export function TopBar() {
+  const { profile, user, signOut } = useAuth();
+  const router = useRouter();
+  
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'Agente';
+  const avatarUrl = profile?.avatar_url || `https://ui-avatars.com/api/?name=${displayName}&background=00a3ff&color=fff`;
+
   return (
-    <header className="fixed top-0 right-0 left-0 md:left-64 z-50 bg-surface text-primary-container font-sans font-black tracking-tight uppercase shadow-lg flex justify-between items-center px-6 h-16 border-b border-outline-variant/10">
+    <header className="fixed top-0 right-0 left-0 md:left-64 z-50 bg-[#0f0f12]/80 backdrop-blur-xl text-white font-sans font-black tracking-tight uppercase flex justify-between items-center px-6 h-16 border-b border-white/5">
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold tracking-widest">SONOPLASTIA</h1>
+        <h1 className="text-xl font-black tracking-widest italic text-[#00a3ff]">SONOPLASTIA</h1>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-md">
-          <span className="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#4ae176]"></span>
-          <span className="font-mono text-xs font-bold text-on-surface">SISTEMA ONLINE</span>
+      <div className="flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg border border-white/5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4ae176] shadow-[0_0_8px_#4ae176]"></span>
+          <span className="font-mono text-[9px] font-black text-white/60 tracking-widest leading-none">SISTEMA ONLINE</span>
         </div>
-        <img
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnG3Sj9HAcbQ47B1px3v1PAfNySTzw4D4KJH6QfO4h30UQNgX6o7_2NN5mCdSs72DDfcY5uyd1hYnJHrn5V3pS3BsfRbyPQ5Em7lPhTmeqxiseVE_RPFf9Bb3G5I6za9Ux4gL-eCeQNTktMgEASHvxGiywVTPUXh9m2n4mmvBIsUiWtSuUMXVAMrsNJJuxrOMx-XPp0IKUnZIMstDoyFAcsw_RWzQcJwC-1ILTVHIt9jDX5DgHM9MB4ES1h6Z4LfS4iGCklhV7JaE"
-          alt="Avatar"
-          className="w-8 h-8 rounded-full border border-primary/30"
-        />
+        
+        <div className="flex items-center gap-4 group">
+          <div className="text-right hidden sm:block">
+             <p className="font-sans text-[11px] font-black text-white leading-none mb-0.5">{displayName.toUpperCase()}</p>
+             <p className="font-mono text-[8px] text-white/20 font-black uppercase tracking-widest">{profile?.funcao || 'OPERADOR'}</p>
+          </div>
+          <Link href="/perfil" className="relative group">
+            <img
+              src={avatarUrl}
+              alt="Avatar"
+              className="w-9 h-9 rounded-xl border border-white/10 group-hover:border-[#00a3ff]/40 transition-all object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${displayName}&background=00a3ff&color=fff`;
+              }}
+            />
+            <div className="absolute inset-0 rounded-xl bg-[#00a3ff]/0 group-hover:bg-[#00a3ff]/10 transition-all pointer-events-none" />
+          </Link>
+          <button 
+            onClick={handleSignOut}
+            className="p-2 hover:bg-red-500/10 rounded-lg text-white/20 hover:text-red-500 transition-all"
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </header>
   );
