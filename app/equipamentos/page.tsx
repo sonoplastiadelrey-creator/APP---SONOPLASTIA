@@ -373,20 +373,18 @@ export default function EquipamentosPage() {
               onClick={() => setShowModal(false)}
               className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[70]"
             />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-[80] max-h-[90vh] overflow-y-auto"
-              style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
-            >
-              <div className="h-px bg-gradient-to-r from-transparent via-[#00a3ff]/40 to-transparent" />
-              <div className="flex justify-center pt-4 pb-2">
-                <div className="w-12 h-1.5 rounded-full bg-white/20" />
-              </div>
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:p-8 pointer-events-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl pointer-events-auto border border-white/10 shadow-2xl relative"
+                style={{ background: 'linear-gradient(180deg, #15151f 0%, #0f0f17 100%)' }}
+              >
+                <div className="h-px bg-gradient-to-r from-transparent via-[#00a3ff]/40 to-transparent absolute top-0 left-0 right-0" />
 
-              <div className="px-6 pb-12 pt-4">
+                <div className="px-8 pb-10 pt-8">
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <p className="font-mono text-[10px] text-[#00a3ff] uppercase tracking-[0.3em] font-black mb-1">
@@ -506,6 +504,7 @@ export default function EquipamentosPage() {
                 </div>
               </div>
             </motion.div>
+          </div>
           </>
         )}
       </AnimatePresence>
