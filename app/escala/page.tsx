@@ -224,7 +224,7 @@ export default function EscalaPage() {
           role: e.funcao_no_culto || 'Sem função',
           initial: (e.funcao_no_culto || 'A').charAt(0).toUpperCase(),
           empty: !e.operadores && !e.membro_nome,
-          avatar: e.operadores?.avatar_url || avatarImages[Math.floor(Math.random() * avatarImages.length)]
+          avatar: e.operadores ? (e.operadores.avatar_url || `https://i.pravatar.cc/150?u=${e.operadores.codigo}`) : null
         }))
       }));
 
@@ -271,10 +271,10 @@ export default function EscalaPage() {
     { nome: '', funcao: 'OPERADOR DATASHOW' }
   ]);
 
-  const addMembro = () => setMembros([...membros, { nome: '', funcao: '' }]);
-  const removeMembro = (idx: number) => setMembros(membros.filter((_, i) => i !== idx));
+  const addMembro = () => setMembros(prev => [...prev, { nome: '', funcao: '' }]);
+  const removeMembro = (idx: number) => setMembros(prev => prev.filter((_, i) => i !== idx));
   const updateMembro = (idx: number, field: 'nome' | 'funcao', value: string) =>
-    setMembros(membros.map((m, i) => i === idx ? { ...m, [field]: value } : m));
+    setMembros(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value } : m));
 
   const handleSave = async () => {
     console.log('Tentando salvar escala:', { culto, data, horarioInicio, membros });
@@ -608,16 +608,13 @@ export default function EscalaPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block font-mono text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Nome do Culto *</label>
-                    <div className="relative">
-                      <select
-                        value={editCulto}
-                        onChange={e => setEditCulto(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-sans text-sm text-white appearance-none focus:outline-none focus:border-[#ffb95f]/50 focus:ring-1 focus:ring-[#ffb95f]/20 transition-all"
-                      >
-                        {cultoOptions.map(o => <option key={o} value={o} className="bg-[#15151f]">{o}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-                    </div>
+                    <input
+                      type="text"
+                      value={editCulto}
+                      onChange={e => setEditCulto(e.target.value)}
+                      placeholder="Ex: Domingo Manhã"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-sans text-sm text-white focus:outline-none focus:border-[#ffb95f]/50 focus:ring-1 focus:ring-[#ffb95f]/20 transition-all"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -823,20 +820,15 @@ export default function EscalaPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Culto select */}
                   <div>
-                    <label className="block font-mono text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Tipo de Culto *</label>
-                    <div className="relative">
-                      <select
-                        value={culto}
-                        onChange={e => setCulto(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-sans text-sm text-white appearance-none focus:outline-none focus:border-[#00a3ff]/50 focus:ring-1 focus:ring-[#00a3ff]/20 transition-all"
-                      >
-                        <option value="" className="bg-[#15151f]">Selecionar culto...</option>
-                        {cultoOptions.map(o => <option key={o} value={o} className="bg-[#15151f]">{o}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
-                    </div>
+                    <label className="block font-mono text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Nome do Culto *</label>
+                    <input
+                      type="text"
+                      value={culto}
+                      onChange={e => setCulto(e.target.value)}
+                      placeholder="Ex: Domingo Manhã"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-sans text-sm text-white focus:outline-none focus:border-[#00a3ff]/50 focus:ring-1 focus:ring-[#00a3ff]/20 transition-all"
+                    />
                   </div>
 
                   {/* Data */}

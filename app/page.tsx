@@ -77,6 +77,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showDataShowChecklist, setShowDataShowChecklist] = useState(false);
+  const [bustedEquipment, setBustedEquipment] = useState<any[]>([]);
 
   // Fetch initial data
   const fetchData = async () => {
@@ -108,6 +110,15 @@ export default function Dashboard() {
 
       if (hwError) throw hwError;
       setHardware(hw || []);
+
+      // 3. Busted Equipments
+      const { data: brokenEq } = await supabase
+        .from('equipamentos')
+        .select('*')
+        .in('status', ['DEFEITO', 'MANUTENÇÃO'])
+        .limit(5);
+      
+      if (brokenEq) setBustedEquipment(brokenEq);
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -225,6 +236,11 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {loading ? (
                 [1,2,3,4].map(i => <div key={i} className="h-48 rounded-2xl bg-white/5 animate-pulse" />)
+              ) : weeklySchedule.length === 0 ? (
+                <div className="col-span-full py-12 text-center rounded-3xl border-2 border-dashed border-white/5 bg-white/2">
+                   <Calendar className="w-8 h-8 text-white/20 mx-auto mb-3" />
+                   <p className="font-mono text-xs uppercase tracking-widest text-white/40 font-bold">Nenhuma escala programada.</p>
+                </div>
               ) : weeklySchedule.map((culto, idx) => (
                 <ScheduleCard key={culto.id} culto={culto} delay={idx * 0.1} />
               ))}
@@ -281,18 +297,32 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Equipment Warnings */}
+            {bustedEquipment.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#ff6b6b]/10 border border-[#ff6b6b]/30 rounded-2xl p-4 flex gap-3 shadow-[0_0_20px_rgba(255,107,107,0.15)] mb-6">
+                <AlertTriangle className="w-5 h-5 text-[#ff6b6b] flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-sans font-black text-[#ff6b6b] text-sm uppercase">Aviso de Manutenção ({bustedEquipment.length})</h3>
+                  <p className="font-mono text-[9px] text-white/60 mt-1 uppercase font-bold leading-relaxed">
+                    {bustedEquipment.map(e => e.nome).join(', ')} precisam de reparo.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Quick Actions */}
             <div className="grid grid-cols-2 gap-4">
               <QuickActionButton 
                 icon={Play} 
-                label="Iniciar Culto" 
+                label="Sonoplastia" 
                 color="#00a3ff" 
                 onClick={() => setShowChecklist(true)}
               />
               <QuickActionButton 
-                icon={UserPlus} 
-                label="Substituir" 
-                color="#ff6b6b" 
+                icon={Monitor} 
+                label="Data Show" 
+                color="#ffb95f" 
+                onClick={() => setShowDataShowChecklist(true)}
               />
             </div>
           </div>
@@ -379,6 +409,74 @@ export default function Dashboard() {
                  <button 
                    onClick={() => setShowChecklist(false)}
                    className="px-8 py-4 bg-[#00a3ff] rounded-2xl font-mono text-[11px] font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_20px_rgba(0,163,255,0.3)] hover:scale-105 transition-transform"
+                 >
+                   FINALIZAR CHECKLIST
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DATASHOW CHECKLIST MODAL ─────────────────── */}
+      <AnimatePresence>
+        {showDataShowChecklist && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDataShowChecklist(false)}
+              className="absolute inset-0 bg-[#0a0a0f]/90 backdrop-blur-xl"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-[#14141a] border border-white/10 rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden"
+            >
+              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-[#ffb95f]/5 via-transparent to-transparent">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-[#ffb95f]/20 flex items-center justify-center border border-[#ffb95f]/30 shadow-[0_0_20px_rgba(255,185,95,0.2)]">
+                       <Monitor className="w-6 h-6 text-[#ffb95f]" />
+                    </div>
+                    <div>
+                       <h2 className="font-sans font-black text-2xl text-white tracking-tight uppercase italic">📺 DATASHOW</h2>
+                       <p className="font-mono text-[9px] text-white/40 uppercase tracking-[0.3em] font-black">Tarefas Pré-Culto</p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setShowDataShowChecklist(false)}
+                   className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all text-white/40 hover:text-white"
+                 >
+                   <X className="w-5 h-5" />
+                 </button>
+              </div>
+
+              <div className="p-8">
+                 <ChecklistSection 
+                   title="Checklist"
+                   icon={FileText} 
+                   color="#ffb95f"
+                   items={[
+                     "Ligar computador, tvs",
+                     "Fazer abertura do culto",
+                     "Verificar os hinos do dia",
+                     "Post de dízimo",
+                     "Post de culto verificar se temos"
+                   ]} 
+                 />
+              </div>
+
+              <div className="p-8 bg-white/2 border-t border-white/5 flex justify-between items-center">
+                 <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#ffb95f] shadow-[0_0_8px_#ffb95f] animate-pulse" />
+                    <span className="font-mono text-[9px] text-white/40 uppercase font-black tracking-widest leading-none">Console Data Show</span>
+                 </div>
+                 <button 
+                   onClick={() => setShowDataShowChecklist(false)}
+                   className="px-8 py-4 bg-[#ffb95f] text-black rounded-2xl font-mono text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_10px_20px_rgba(255,185,95,0.3)] hover:scale-105 transition-transform"
                  >
                    FINALIZAR CHECKLIST
                  </button>

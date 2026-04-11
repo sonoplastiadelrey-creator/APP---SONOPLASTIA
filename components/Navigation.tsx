@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, HardDrive, Users, User, LogOut } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { LayoutDashboard, CalendarDays, HardDrive, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import Image from 'next/image';
@@ -83,15 +83,9 @@ export function BottomNav() {
 
 
 export function TopBar() {
-  const { profile, user, signOut } = useAuth();
-  const router = useRouter();
-  
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/login');
-  };
+  const { profile } = useAuth();
 
-  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'Agente';
+  const displayName = profile?.full_name || 'Administrador';
   const avatarUrl = profile?.avatar_url || `https://ui-avatars.com/api/?name=${displayName}&background=00a3ff&color=fff`;
 
   return (
@@ -123,13 +117,7 @@ export function TopBar() {
             />
             <div className="absolute inset-0 rounded-xl bg-[#00a3ff]/0 group-hover:bg-[#00a3ff]/10 transition-all pointer-events-none" />
           </Link>
-          <button 
-            onClick={handleSignOut}
-            className="p-2 hover:bg-red-500/10 rounded-lg text-white/20 hover:text-red-500 transition-all"
-            title="Sair"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+
         </div>
       </div>
     </header>
