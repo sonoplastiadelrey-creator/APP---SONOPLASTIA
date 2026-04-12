@@ -18,7 +18,8 @@ import {
   Wifi,
   Radio,
   Zap,
-  Edit2
+  Edit2,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -74,7 +75,7 @@ const serviceCardColors: Record<string, { border: string; glow: string; bar: str
 const cultoOptions = ['Quinta-Feira', 'Sábado (Jovens)', 'Domingo Manhã', 'Domingo Noite', 'Especial'];
 const funcaoOptions = ['SONOPLASTA', 'OPERADOR DATASHOW', 'BACKUP', 'CÂMERA', 'LIGHTING'];
 
-type StaffMember = { name: string; role: string; initial: string; empty?: boolean; avatar?: string };
+type StaffMember = { name: string; role: string; initial: string; empty?: boolean; avatar?: string; phone?: string };
 type Service = { id: string | number; title: string; time: string; live: boolean; color: string; staff: StaffMember[] };
 
 function ParticleOrb({ x, y, color, delay }: { x: string; y: string; color: string; delay: number }) {
@@ -87,6 +88,14 @@ function ParticleOrb({ x, y, color, delay }: { x: string; y: string; color: stri
     />
   );
 }
+
+const sendWhatsAppNotification = (member: StaffMember, serviceTitle: string, serviceTime: string) => {
+  if (!member.phone) return;
+  const cleaned = member.phone.replace(/\D/g, '');
+  const finalPhone = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+  const msg = `Olá *${member.name}*!\n\nVocê foi escalado(a) como *${member.role}* para o culto *${serviceTitle}* (${serviceTime}).\n\nPoderia nos confirmar sua presença respondendo SIM ou NÃO nesta conversa? Deus abençoe!`;
+  window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+};
 
 export default function EscalaPage() {
   const [services, setServices] = useState<Service[]>([]);
@@ -224,7 +233,8 @@ export default function EscalaPage() {
           role: e.funcao_no_culto || 'Sem função',
           initial: (e.funcao_no_culto || 'A').charAt(0).toUpperCase(),
           empty: !e.operadores && !e.membro_nome,
-          avatar: e.operadores ? (e.operadores.avatar_url || `https://i.pravatar.cc/150?u=${e.operadores.codigo}`) : null
+          avatar: e.operadores ? (e.operadores.avatar_url || `https://i.pravatar.cc/150?u=${e.operadores.codigo}`) : null,
+          phone: e.operadores?.telefone || null
         }))
       }));
 
@@ -552,6 +562,16 @@ export default function EscalaPage() {
                               </p>
                               <p className="text-[9px] font-mono text-on-surface-variant uppercase tracking-wider truncate">{member.role}</p>
                             </div>
+                            {member.phone && !member.empty && (
+                              <button
+                                onClick={() => sendWhatsAppNotification(member, service.title, service.time)}
+                                className="mr-1 w-7 h-7 flex flex-shrink-0 items-center justify-center rounded-lg bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/30 hover:scale-110 transition-all shadow-[0_0_10px_rgba(37,211,102,0.15)]"
+                                title="Avisar no WhatsApp"
+                                aria-label="Avisar no WhatsApp"
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                              </button>
+                            )}
                             <div className={cn("flex-shrink-0 px-2 py-0.5 rounded-lg text-[8px] font-mono font-black uppercase border", rc.bg, rc.text, rc.border)}>
                               {member.initial}
                             </div>
